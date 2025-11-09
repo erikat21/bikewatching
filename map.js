@@ -99,13 +99,15 @@ const radiusScale = d3.scaleSqrt()
   return station;
 });
 
+let stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
+
   const circles = svg
   .selectAll('circle')
   .data(stations)
   .enter()
   .append('circle')
   .attr('r', d => radiusScale(d.totalTraffic)) // Radius of the circle
-  .attr('fill', 'steelblue') // Circle fill color
+//   .attr('fill', 'steelblue') // Circle fill color
   .attr('stroke', 'white') // Circle border color
   .attr('stroke-width', 1) // Circle border thickness
   .attr('opacity', 0.6) // Circle opacity
@@ -117,7 +119,11 @@ const radiusScale = d3.scaleSqrt()
       .text(
         `${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`,
       );
-    });
+    })
+     .style('--departure-ratio', d =>
+  d.totalTraffic > 0
+    ? stationFlow(d.departures / d.totalTraffic)
+    : 0.5);
 
   function updatePositions() {
     circles
@@ -147,7 +153,7 @@ function updateScatterPlot(timeFilter) {
     .attr('cx', d => getCoords(d).cx)
     .attr('cy', d => getCoords(d).cy)
     .attr('r', d => radiusScale(d.totalTraffic))
-    .attr('fill', 'steelblue')
+    // .attr('fill', 'steelblue')
     .attr('stroke', 'white')
     .attr('stroke-width', 1)
     .attr('opacity', 0.6)
@@ -156,7 +162,12 @@ function updateScatterPlot(timeFilter) {
       d3.select(this)
         .select('title')
         .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
-    });
+    })
+    .style('--departure-ratio', d =>
+  d.totalTraffic > 0
+    ? stationFlow(d.departures / d.totalTraffic)
+    : 0.5
+    );
 }
   
 function updateTimeDisplay() {
@@ -174,6 +185,7 @@ function updateTimeDisplay() {
 timeSlider.addEventListener('input', updateTimeDisplay);
 updateTimeDisplay(); // initial call
 
+setTimeout(() => map.resize(), 100); 
 });
 
 function getCoords(station) {
