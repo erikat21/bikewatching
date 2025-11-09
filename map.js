@@ -59,7 +59,25 @@ map.on('load', async () => {
   }
 
   const svg = d3.select('#map').select('svg');
-  const trips = await d3.csv('https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv')
+  const trips = await d3.csv(
+  'https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv',
+  trip => {
+    trip.started_at = new Date(trip.started_at);
+    trip.ended_at = new Date(trip.ended_at);
+    return trip;
+  }
+);
+
+const timeSlider = document.getElementById('time-slider');
+const selectedTime = document.getElementById('selected-time');
+const anyTimeLabel = document.getElementById('any-time');
+
+stations = computeStationTraffic(stations, trips);
+
+const radiusScale = d3.scaleSqrt()
+  .domain([0, d3.max(stations, d => d.totalTraffic)])
+  .range([0, 25]);
+
 
   const departures = d3.rollup(
     trips,
@@ -73,15 +91,6 @@ map.on('load', async () => {
     (d) => d.end_station_id,
   );
 
-//   const totalTraffic = new Map();
-
-//   stations.forEach(station => {
-//     const id = station.station_id;
-//     const dep = departures.get(id) || 0;
-//     const arr = arrivals.get(id) || 0;
-//     totalTraffic.set(id, dep + arr);
-// });
-
   stations = stations.map((station) => {
   let id = station.short_name;
   station.arrivals = arrivals.get(id) ?? 0;
@@ -89,13 +98,6 @@ map.on('load', async () => {
   station.totalTraffic = station.arrivals + station.departures;
   return station;
 });
-
-  const radiusScale = d3
-  .scaleSqrt()
-  .domain([0, d3.max(stations, (d) => d.totalTraffic)])
-  .range([0, 25]);
-
-
 
   const circles = svg
   .selectAll('circle')
@@ -132,10 +134,85 @@ map.on('load', async () => {
   map.on('resize', updatePositions); // Update on window resize
   map.on('moveend', updatePositions); // Final adjustment after movement ends
 
+function updateScatterPlot(timeFilter) {
+  const filteredTrips = filterTripsByTime(trips, timeFilter);
+  const filteredStations = computeStationTraffic(stations, filteredTrips);
+
+  // Adjust radius scale depending on filter
+  timeFilter === -1 ? radiusScale.range([0, 25]) : radiusScale.range([3, 50]);
+
+  circles
+    .data(filteredStations, d => d.short_name)
+    .join('circle')
+    .attr('cx', d => getCoords(d).cx)
+    .attr('cy', d => getCoords(d).cy)
+    .attr('r', d => radiusScale(d.totalTraffic))
+    .attr('fill', 'steelblue')
+    .attr('stroke', 'white')
+    .attr('stroke-width', 1)
+    .attr('opacity', 0.6)
+    .style('pointer-events', 'auto')
+    .each(d => {
+      d3.select(this)
+        .select('title')
+        .text(`${d.totalTraffic} trips (${d.departures} departures, ${d.arrivals} arrivals)`);
+    });
+}
+  
+function updateTimeDisplay() {
+  const timeFilter = Number(timeSlider.value);
+  if (timeFilter === -1) {
+    selectedTime.textContent = '';
+    anyTimeLabel.style.display = 'block';
+  } else {
+    selectedTime.textContent = formatTime(timeFilter);
+    anyTimeLabel.style.display = 'none';
+  }
+  updateScatterPlot(timeFilter);
+}
+
+timeSlider.addEventListener('input', updateTimeDisplay);
+updateTimeDisplay(); // initial call
+
 });
 
 function getCoords(station) {
   const point = new mapboxgl.LngLat(+station.lon, +station.lat); // Convert lon/lat to Mapbox LngLat
   const { x, y } = map.project(point); // Project to pixel coordinates
   return { cx: x, cy: y }; // Return as object for use in SVG attributes
+}
+
+// Format minutes to HH:MM AM/PM
+function formatTime(minutes) {
+  const date = new Date(0, 0, 0, 0, minutes);
+  return date.toLocaleString('en-US', { timeStyle: 'short' });
+}
+
+// Convert Date to minutes since midnight
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+// Filter trips by time filter
+function filterTripsByTime(trips, timeFilter) {
+  if (timeFilter === -1) return trips;
+  return trips.filter(trip => {
+    const startMins = minutesSinceMidnight(trip.started_at);
+    const endMins = minutesSinceMidnight(trip.ended_at);
+    return Math.abs(startMins - timeFilter) <= 60 || Math.abs(endMins - timeFilter) <= 60;
+  });
+}
+
+// Compute station traffic (arrivals, departures, totalTraffic)
+function computeStationTraffic(stations, trips) {
+  const departures = d3.rollup(trips, v => v.length, d => d.start_station_id);
+  const arrivals = d3.rollup(trips, v => v.length, d => d.end_station_id);
+
+  return stations.map(station => {
+    const id = station.short_name;
+    station.departures = departures.get(id) ?? 0;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.totalTraffic = station.departures + station.arrivals;
+    return station;
+  });
 }

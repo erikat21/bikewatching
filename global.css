@@ -8,3 +8,31 @@ body {
   margin: auto;
   padding: 1em;
 }
+
+label {
+  margin-left: auto; /* Push slider to the right */
+  display: flex;
+  flex-direction: column; /* Stack input, time, and <em> vertically */
+  align-items: flex-start;
+}
+
+#time-slider {
+  width: 300px;
+  margin-top: 0.3em;
+}
+
+#selected-time {
+  display: block;
+  font-weight: bold;
+  margin-top: 0.2em;
+}
+
+#any-time {
+  display: block; /* Make sure it doesn’t sit inline */
+  color: #888;
+  font-style: italic;
+  font-size: 0.9em;
+  margin-top: 0.1em;
+}
+
+
